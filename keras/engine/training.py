@@ -1105,6 +1105,17 @@ class Model(base_layer.Layer, version_utils.ModelVersionSelector):
         """
         del x  # The default implementation does not use `x`.
         self.compiled_metrics.update_state(y, y_pred, sample_weight)
+        return self._model_metrics()
+
+    def _model_metrics(self):
+        """Returns model metrics as a dict.
+
+        Returns:
+          A `dict` containing values that will be passed to
+          `tf.keras.callbacks.CallbackList.on_train_batch_end()`. Typically, the
+          values of the metrics listed in `self.metrics` are returned. Example:
+          `{'loss': 0.2, 'accuracy': 0.7}`.
+        """
         # Collect metrics to return
         return_metrics = {}
         for metric in self.metrics:
@@ -1587,7 +1598,18 @@ class Model(base_layer.Layer, version_utils.ModelVersionSelector):
                             callbacks.on_train_batch_end(end_step, logs)
                             if self.stop_training:
                                 break
-
+                    # In async Parameter Server Strategy, last worker scheduled
+                    # may not have latest logs.Get metrics of the model directly
+                    # Get metrics, only if at least one batch was processed by
+                    # inspecting logs value.
+                    # TODO (b/242347460) apply the change regardless of strategy
+                    # Test to verify that it works for all strategies
+                    # if self._cluster_coordinator:
+                    metric_logs = self._model_metrics()
+                    if isinstance(logs, dict) and set(logs.keys()) == set(
+                        metric_logs.keys()
+                    ):
+                        logs = metric_logs
                 logs = tf_utils.sync_to_numpy_or_python_type(logs)
                 if logs is None:
                     raise ValueError(
@@ -1970,6 +1992,18 @@ class Model(base_layer.Layer, version_utils.ModelVersionSelector):
                             logs = tmp_logs
                             end_step = step + data_handler.step_increment
                             callbacks.on_test_batch_end(end_step, logs)
+            # In async Parameter Server Strategy, the last worker scheduled
+            # may not have latest logs. Get the metrics of the model directly
+            # Get metrics, only if at least one batch was processed by
+            # inspecting logs value.
+            # TODO (b/242347460) apply this change regardless of strategy
+            # Test to verify that it works for all strategies
+            # if self._cluster_coordinator:
+            metric_logs = self._model_metrics()
+            if isinstance(logs, dict) and set(logs.keys()) == set(
+                metric_logs.keys()
+            ):
+                logs = metric_logs
             logs = tf_utils.sync_to_numpy_or_python_type(logs)
             callbacks.on_test_end(logs=logs)
 
