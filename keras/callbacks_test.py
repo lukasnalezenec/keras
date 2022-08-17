@@ -38,6 +38,7 @@ from keras.callbacks import Callback
 from keras.engine import sequential
 from keras.layers import Activation
 from keras.layers import Dense
+from keras.optimizers import sgd_experimental
 from keras.optimizers.optimizer_v2 import gradient_descent
 from keras.optimizers.schedules import learning_rate_schedule
 from keras.testing_infra import test_combinations
@@ -2826,7 +2827,7 @@ class TestTensorBoardV2(test_combinations.TestCase):
             layers, input_shape=(10, 10, 1)
         )
         if compile_model:
-            opt = gradient_descent.SGD(learning_rate=0.001)
+            opt = sgd_experimental.SGD(learning_rate=0.001)
             model.compile(
                 opt, "mse", run_eagerly=test_utils.should_run_eagerly()
             )
